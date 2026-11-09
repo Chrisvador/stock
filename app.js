@@ -1,4 +1,4 @@
-/* Stock Cevilog : stock réel, labo / démo avec dépréciation en %, attente livraison client.
+/* Stock Cevilog : stock réel et labo / démo avec dépréciation en %, attente livraison client.
    Données dans Supabase (projet mes-chats, tables stk_*), partagées avec les membres du foyer. */
 (function(){
 "use strict";
@@ -11,7 +11,7 @@ var LOC={stock:"Stock réel",labo:"Labo / démo",attente:"Attente livraison"};
 var LOCS={stock:"Stock",labo:"Labo",attente:"Attente"};
 var $=function(id){return document.getElementById(id);};
 var me=null, foyer=null, ready=false, writable=true;
-var items=[], moves=[], cfg={pct:30};
+var items=[], moves=[], cfg={pct:30,pctStock:0};
 var S={tab:"stock",q:"",cat:"",empty:false,unchk:false,sort:"ref",dir:1};
 try{ var p=JSON.parse(localStorage.getItem("cevilog-stock-ui")||"null"); if(p){ S.tab=p.tab||S.tab; S.empty=!!p.empty; } }catch(e){}
 function keep(){ try{ localStorage.setItem("cevilog-stock-ui",JSON.stringify({tab:S.tab,empty:S.empty})); }catch(e){} }
@@ -28,10 +28,11 @@ function addYears(d,y){ var t=new Date(d+"T00:00:00"); t.setMonth(t.getMonth()+M
 function isAm(i){ return i.amort!=null?!!i.amort:NOAM.indexOf(i.cat)<0; }
 
 /* ---------- dépréciation : un taux en % appliqué au prix d'achat ---------- */
-function pctOf(i){ return isAm(i)?Math.max(0,Math.min(100,i.pct!=null?+i.pct:cfg.pct)):0; }
+function defPct(loc){ return loc==="labo"?cfg.pct:cfg.pctStock; }
+function pctOf(i){ return isAm(i)?Math.max(0,Math.min(100,i.pct!=null?+i.pct:defPct(i.loc))):0; }
 function dep(it){
   var cost=(it.qty||0)*(it.pu||0);
-  if(it.loc!=="labo") return {cost:cost,cum:0,vnc:cost,pct:0};
+  if(it.loc==="attente") return {cost:cost,cum:0,vnc:cost,pct:0};
   var p=pctOf(it), cum=Math.round(cost*p)/100;
   return {cost:cost,cum:cum,vnc:cost-cum,pct:p};
 }
@@ -39,20 +40,22 @@ function unitVnc(it){ return dep(Object.assign({},it,{qty:1})).vnc; }
 
 /* ---------- synthèse ---------- */
 function renderSum(){
-  var sv=0,lc=0,lv=0,lcum=0,av=0,n={stock:0,labo:0,attente:0},late=0,t=today();
+  var sc=0,sv=0,lc=0,lv=0,av=0,n={stock:0,labo:0,attente:0},late=0,t=today();
   items.forEach(function(i){
     if(i.qty>0) n[i.loc]=(n[i.loc]||0)+1;
-    if(i.loc==="stock") sv+=i.qty*i.pu;
-    else if(i.loc==="attente"){ av+=i.qty*i.pu; if(i.qty>0&&i.eta&&i.eta<t) late++; }
-    else if(i.loc==="labo"){ var d=dep(i); lc+=d.cost; lv+=d.vnc; lcum+=d.cum; }
+    var d=dep(i);
+    if(i.loc==="stock"){ sc+=d.cost; sv+=d.vnc; }
+    else if(i.loc==="labo"){ lc+=d.cost; lv+=d.vnc; }
+    else { av+=d.cost; if(i.qty>0&&i.eta&&i.eta<t) late++; }
   });
+  function pc(c,v){ return c?NUM.format(Math.round((c-v)/c*1000)/10)+' %':'0 %'; }
   $("n-stock").textContent=n.stock; $("n-labo").textContent=n.labo; $("n-attente").textContent=n.attente||"";
   $("sum").innerHTML=
-    '<div><div class="k">Stock réel</div><div class="v">'+eur(sv)+'</div><div class="s">'+n.stock+' références · prix d’achat</div></div>'+
-    '<div class="lb"><div class="k">Labo · valeur d’achat</div><div class="v">'+eur(lc)+'</div><div class="s">'+n.labo+' références</div></div>'+
-    '<div class="neg"><div class="k">Dépréciation labo</div><div class="v">'+neg(lcum)+'</div><div class="s">'+(lc?NUM.format(Math.round(lcum/lc*1000)/10)+' % en moyenne':'—')+'</div></div>'+
+    '<div><div class="k">Stock réel · net</div><div class="v">'+eur(sv)+'</div><div class="s">achat '+eur(sc)+' · dépréc. '+pc(sc,sv)+'</div></div>'+
+    '<div class="lb"><div class="k">Labo / démo · net</div><div class="v">'+eur(lv)+'</div><div class="s">achat '+eur(lc)+' · dépréc. '+pc(lc,lv)+'</div></div>'+
+    '<div class="neg"><div class="k">Dépréciation totale</div><div class="v">'+neg(sc-sv+lc-lv)+'</div><div class="s">stock '+neg(sc-sv)+' · labo '+neg(lc-lv)+'</div></div>'+
     '<div><div class="k">Attente livraison</div><div class="v">'+eur(av)+'</div><div class="s">'+(n.attente||0)+' références'+(late?' · <span class="tag late">'+late+' en retard</span>':'')+'</div></div>'+
-    '<div class="big"><div class="k">Valeur nette</div><div class="v">'+eur(sv+lv)+'</div><div class="s">stock + labo déprécié '+eur(lv)+'</div></div>';
+    '<div class="big"><div class="k">Valeur nette</div><div class="v">'+eur(sv+lv)+'</div><div class="s">achat '+eur(sc+lc)+' · hors attente</div></div>';
 }
 
 /* ---------- table articles ---------- */
@@ -88,7 +91,7 @@ function renderChips(){
   $("chips").innerHTML=h;
 }
 function renderItems(){
-  var tab=S.tab, labo=tab==="labo", att=tab==="attente", t=today();
+  var tab=S.tab, labo=tab!=="attente", att=tab==="attente", t=today();
   var list=visible().sort(function(a,b){ var x=sortVal(a,S.sort),y=sortVal(b,S.sort); return (x<y?-1:x>y?1:0)*S.dir; });
   var h='<table><thead><tr>'+th("verifie",'<span title="Vérifié à l’inventaire">✓</span>',"ck")+th("ref","Référence")+th("des","Désignation")+th("qty","Qté","r")+th("pu","P.U. HT","r")+th("total","Total HT","r");
   if(labo) h+=th("pct","Dépréc.","r")+th("cum","Montant déprécié","r")+th("vnc","Valeur nette","r");
@@ -188,14 +191,15 @@ function editPanel(it){
     '<div class="f c3 ap"><label class="lab" for="e-client">Client</label><input type="text" id="e-client" value="'+esc(it.client)+'"></div>'+
     '<div class="f c3 ap"><label class="lab" for="e-eta">Livraison prévue</label><input type="date" id="e-eta" value="'+esc(it.eta||"")+'"></div>'+
     '<div class="f c4 dpl"><label class="cb" for="e-am"><input type="checkbox" id="e-am"'+(am?" checked":"")+'> Dépréciable <small>— décoché : garde sa valeur d’achat (objectif, filtre…)</small></label></div>'+
-    '<div class="f c2 dpl dpa"><label class="lab" for="e-pct">Dépréciation (%)</label><input type="number" id="e-pct" min="0" max="100" step="1" value="'+(it.pct!=null?it.pct:cfg.pct)+'"></div>'+
+    '<div class="f c2 dpl dpa"><label class="lab" for="e-pct">Dépréciation (%)</label><input type="number" id="e-pct" min="0" max="100" step="1" value="'+(it.pct!=null?it.pct:defPct(it.loc))+'"></div>'+
     '<div class="f c6 dpl dpa"><div class="prev" id="e-prev"></div></div>'+
     '<div class="f c6"><label class="lab" for="e-note">Note</label><input type="text" id="e-note" value="'+esc(it.note)+'" placeholder="N° de série, emplacement, état…"></div>'+
     '</div><div class="act">'+(isNew?"":'<button class="btn danger" id="e-del" type="button">Supprimer</button>')+'<span class="grow"></span><button class="btn" id="e-cancel" type="button">Annuler</button><button class="btn primary" id="e-save" type="button">Enregistrer</button></div>',
   function(){
-    var amTouched=!isNew||it.amort!=null;
+    var amTouched=!isNew||it.amort!=null, pctTouched=false;
     function sync(){
-      var loc=$("e-loc").value, labo=loc==="labo", amOn=$("e-am").checked;
+      var loc=$("e-loc").value, labo=loc!=="attente", amOn=$("e-am").checked;
+      if(it.pct==null&&!pctTouched) $("e-pct").value=defPct(loc);
       Array.prototype.forEach.call(document.querySelectorAll(".ap"),function(e){ e.hidden=loc!=="attente"; });
       Array.prototype.forEach.call(document.querySelectorAll(".dpl"),function(e){ e.hidden=!labo; });
       Array.prototype.forEach.call(document.querySelectorAll(".dpa"),function(e){ e.hidden=!(labo&&amOn); });
@@ -205,6 +209,7 @@ function editPanel(it){
     }
     $("e-cat").addEventListener("change",function(){ if(!amTouched) $("e-am").checked=NOAM.indexOf(this.value)<0; sync(); });
     $("e-am").addEventListener("change",function(){ amTouched=true; sync(); });
+    $("e-pct").addEventListener("input",function(){ pctTouched=true; });
     ["e-loc","e-qty","e-pu","e-pct"].forEach(function(k){ $(k).addEventListener("input",sync); $(k).addEventListener("change",sync); });
     sync();
     $("e-cancel").onclick=closePanel;
@@ -213,7 +218,7 @@ function editPanel(it){
       if(!ref&&!des){ $("e-ref").focus(); return; }
       var d={ref:ref,des:des,cat:$("e-cat").value,brand:$("e-brand").value.trim(),loc:$("e-loc").value,qty:num($("e-qty").value),pu:num($("e-pu").value),
         dateIn:$("e-date").value,amort:$("e-am").checked,note:$("e-note").value.trim(),client:null,eta:null,pct:null};
-      if(d.loc==="labo"&&d.amort){ d.pct=Math.max(0,Math.min(100,num($("e-pct").value))); }
+      if(d.loc!=="attente"&&d.amort){ var pv=Math.max(0,Math.min(100,num($("e-pct").value))); d.pct=(it.pct==null&&!pctTouched&&pv===defPct(d.loc))?null:pv; }
       if(d.loc==="attente"){ d.client=$("e-client").value.trim(); d.eta=$("e-eta").value||null; }
       this.disabled=true; var self=this;
       var p=isNew?addItem(d).then(function(){ return log({type:"creation",ref:d.ref,des:d.des,qty:d.qty,to:d.loc,value:d.qty*d.pu,client:d.client}); })
@@ -237,7 +242,7 @@ function movePanel(it){
     '<div class="f c2"><label class="lab" for="m-qty">Quantité</label><input type="number" id="m-qty" min="1" max="'+it.qty+'" step="1" value="'+it.qty+'"></div>'+
     '<div class="f c2"><label class="lab" for="m-date">Date</label><input type="date" id="m-date" value="'+today()+'"></div>'+
     '<div class="f c4 ml"><label class="cb" for="m-am"><input type="checkbox" id="m-am"'+(isAm(it)?" checked":"")+'> Dépréciable</label></div>'+
-    '<div class="f c2 ml mla"><label class="lab" for="m-pct">Dépréciation (%)</label><input type="number" id="m-pct" min="0" max="100" step="1" value="'+(it.pct!=null?it.pct:cfg.pct)+'"></div>'+
+    '<div class="f c2 ml mla"><label class="lab" for="m-pct">Dépréciation (%)</label><input type="number" id="m-pct" min="0" max="100" step="1" value="'+(it.pct!=null?it.pct:defPct(first))+'"></div>'+
     '<div class="f c3 ma"><label class="lab" for="m-client">Client</label><input type="text" id="m-client" value="'+esc(it.client)+'"></div>'+
     '<div class="f c3 ma"><label class="lab" for="m-eta">Livraison prévue</label><input type="date" id="m-eta" value="'+esc(it.eta||"")+'"></div>'+
     '<div class="f c6"><label class="lab" for="m-note">Note</label><input type="text" id="m-note" placeholder="Motif, salon, démo…"></div>'+
@@ -246,28 +251,29 @@ function movePanel(it){
   function(){
     function pv(){
       var to=$("m-to").value, n=Math.min(it.qty,Math.max(1,Math.floor(num($("m-qty").value)))), date=$("m-date").value||today(), am=$("m-am").checked;
-      Array.prototype.forEach.call(document.querySelectorAll(".ml"),function(e){ e.hidden=to!=="labo"; });
-      Array.prototype.forEach.call(document.querySelectorAll(".mla"),function(e){ e.hidden=!(to==="labo"&&am); });
+      var dz=to!=="attente";
+      if(it.pct==null&&!mTouched) $("m-pct").value=defPct(to);
+      Array.prototype.forEach.call(document.querySelectorAll(".ml"),function(e){ e.hidden=!dz; });
+      Array.prototype.forEach.call(document.querySelectorAll(".mla"),function(e){ e.hidden=!(dz&&am); });
       Array.prototype.forEach.call(document.querySelectorAll(".ma"),function(e){ e.hidden=to!=="attente"; });
-      var uv=unitVnc(it), t, p=Math.max(0,Math.min(100,num($("m-pct").value)));
-      if(to==="labo") t=am?'Valeur d’achat <b>'+eur(n*it.pu)+'</b>, dépréciée de '+NUM.format(p)+' % : valeur nette <b>'+eur(n*it.pu*(1-p/100))+'</b>.':'Article non dépréciable : il reste au labo à <b>'+eur(n*it.pu)+'</b>.';
-      else if(it.loc==="labo"&&uv!==it.pu) t='Repris à sa valeur dépréciée : <b>'+eur(uv)+'</b> / unité au lieu de '+eur(it.pu)+' (soit <b>'+eur(n*uv)+'</b>).';
-      else t='Valeur transférée : <b>'+eur(n*it.pu)+'</b>.'+(to==="attente"?' Elle sort de la valeur nette jusqu’à la livraison.':'');
+      var t, p=Math.max(0,Math.min(100,num($("m-pct").value)));
+      if(dz) t=am?'Valeur d’achat <b>'+eur(n*it.pu)+'</b>, dépréciée de '+NUM.format(p)+' % : valeur nette <b>'+eur(n*it.pu*(1-p/100))+'</b>.':'Article non dépréciable : il garde sa valeur d’achat <b>'+eur(n*it.pu)+'</b>.';
+      else t='Valeur transférée : <b>'+eur(n*it.pu)+'</b> (prix d’achat). Elle sort de la valeur nette jusqu’à la livraison.';
       $("m-prev").innerHTML=t;
     }
+    var mTouched=false; $("m-pct").addEventListener("input",function(){ mTouched=true; });
     ["m-to","m-qty","m-date","m-am","m-pct"].forEach(function(k){ $(k).addEventListener("input",pv); $(k).addEventListener("change",pv); }); pv();
     $("m-cancel").onclick=closePanel;
     $("m-ok").onclick=function(){
       var to=$("m-to").value, n=Math.floor(num($("m-qty").value)), date=$("m-date").value||today();
       if(n<1||n>it.qty){ $("m-qty").focus(); return; }
       var moved=clean(it); moved.qty=n; moved.loc=to; moved.ts=Date.now(); moved.client=null; moved.eta=null;
-      if(it.loc==="labo"){ var uvd=unitVnc(it); if(uvd!==it.pu){ moved.note=[it.note,"Retour labo le "+fd(date)+" (PU d’origine "+eur(it.pu)+")"].filter(Boolean).join(" · "); moved.pu=Math.round(uvd*100)/100; } }
       moved.pct=null;
-      if(to==="labo"){ moved.amort=$("m-am").checked; if(moved.amort) moved.pct=Math.max(0,Math.min(100,num($("m-pct").value))); }
+      if(to!=="attente"){ moved.amort=$("m-am").checked; if(moved.amort){ var pv=Math.max(0,Math.min(100,num($("m-pct").value))); moved.pct=(it.pct==null&&!mTouched&&pv===defPct(to))?null:pv; } }
       if(to==="attente"){ moved.client=$("m-client").value.trim(); moved.eta=$("m-eta").value||null; }
       this.disabled=true; var self=this;
       var p=n===it.qty?setItem(it.id,moved):updItem(it.id,{qty:it.qty-n}).then(function(){ return addItem(moved); });
-      p.then(function(){ return log({type:"transfert",date:date,ref:it.ref,des:it.des,qty:n,from:it.loc,to:to,value:n*moved.pu,client:moved.client,note:$("m-note").value.trim()}); })
+      p.then(function(){ return log({type:"transfert",date:date,ref:it.ref,des:it.des,qty:n,from:it.loc,to:to,value:n*unitVnc(moved),client:moved.client,note:$("m-note").value.trim()}); })
        .then(function(){ closePanel(); load(); msg(n+" × "+it.ref+" → "+LOC[to].toLowerCase()+"."); },function(e){ self.disabled=false; fail(e); });
     };
   });
@@ -287,7 +293,7 @@ function qtyPanel(it,kind){
       var n=Math.floor(num($("q-qty").value)), date=$("q-date").value||today(), note=$("q-note").value.trim(), client=out?$("q-client").value.trim():null;
       if(n<1||(out&&n>it.qty)){ $("q-qty").focus(); return; }
       var upd, value;
-      if(out){ upd={qty:it.qty-n}; value=n*(it.loc==="labo"?unitVnc(it):it.pu); }
+      if(out){ upd={qty:it.qty-n}; value=n*unitVnc(it); }
       else { var pu=num($("q-pu").value), nq=it.qty+n; upd={qty:nq,pu:nq?Math.round(((it.qty*it.pu)+(n*pu))/nq*100)/100:pu}; value=n*pu; }
       this.disabled=true; var self=this;
       updItem(it.id,upd).then(function(){ return log({type:dlv?"livraison":out?"sortie":"entree",date:date,ref:it.ref,des:it.des,qty:n,from:out?it.loc:null,to:out?null:it.loc,value:value,client:client,note:note}); })
@@ -301,7 +307,7 @@ function csv(){
   var ord={stock:0,labo:1,attente:2};
   var rows=[["Affectation","Référence","Désignation","Catégorie","Marque","Qté","PU HT","Total HT","Dépréciable","Dépréciation %","Montant déprécié","Valeur nette","Client","Livraison prévue","Vérifié le","Note"]];
   items.filter(function(i){return i.qty>0;}).sort(function(a,b){ return (ord[a.loc]-ord[b.loc])||(a.ref||"").localeCompare(b.ref||""); }).forEach(function(i){
-    var d=dep(i), f=function(n){ return (Math.round(n*100)/100).toFixed(2).replace(".",","); }, lb=i.loc==="labo", am=isAm(i);
+    var d=dep(i), f=function(n){ return (Math.round(n*100)/100).toFixed(2).replace(".",","); }, lb=i.loc!=="attente", am=isAm(i);
     rows.push([LOCS[i.loc],i.ref,i.des,i.cat,i.brand,i.qty,f(i.pu),f(d.cost),lb?(am?"Oui":"Non"):"",lb&&am?String(d.pct).replace(".",","):"",f(d.cum),f(d.vnc),i.client,i.eta?fd(i.eta):"",i.verifie?fd(i.verifie_le):"",i.note]);
   });
   return "﻿"+rows.map(function(r){ return r.map(function(c){ c=String(c==null?"":c); return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(";"); }).join("\r\n");
@@ -341,18 +347,19 @@ document.addEventListener("click",function(e){
 });
 $("q").addEventListener("input",function(){ S.q=this.value; render(); });
 $("addBtn").addEventListener("click",function(){ if(foyer) editPanel(null); });
-$("defpct").value=cfg.pct;
-$("defpct").addEventListener("change",function(){
-  var v=Math.max(0,Math.min(100,num(this.value))); this.value=v; if(!foyer||v===cfg.pct) return;
-  cfg.pct=v; render();
-  sb.from("stk_config").upsert({foyer_id:foyer.id,pct:v}).then(ok).then(function(){ msg("Taux par défaut : "+NUM.format(v)+" %."); },fail);
-});
+function showDefs(){ $("defpct").value=cfg.pct; $("defpctS").value=cfg.pctStock; }
+showDefs();
+[["defpct","pct","labo"],["defpctS","pctStock","stock réel"]].forEach(function(x){ $(x[0]).addEventListener("change",function(){
+  var v=Math.max(0,Math.min(100,num(this.value))); this.value=v; if(!foyer||v===cfg[x[1]]) return;
+  cfg[x[1]]=v; render();
+  sb.from("stk_config").upsert({foyer_id:foyer.id,pct:cfg.pct,pct_stock:cfg.pctStock}).then(ok).then(function(){ saveCache(); msg("Taux par défaut "+x[2]+" : "+NUM.format(v)+" %."); },fail);
+}); });
 
 /* ---------- données ---------- */
 var CACHE="stock-cache";
 function norm(o){ o=Object.assign({},o); o.verifie=!!o.verifie; o.qty=+o.qty||0; o.pu=+o.pu||0; o.pct=o.pct==null?null:+o.pct; o.dateIn=o.date_in; if(!LOC[o.loc]) o.loc="stock"; return o; }
 function normM(m){ return {date:m.date,type:m.type,ref:m.ref,des:m.des,qty:+m.qty||0,from:m.from_loc,to:m.to_loc,value:m.value==null?null:+m.value,client:m.client,note:m.note}; }
-function saveCache(){ try{ localStorage.setItem(CACHE,JSON.stringify({uid:me&&me.id,foyer:foyer,items:items,moves:moves,pct:cfg.pct})); }catch(e){} }
+function saveCache(){ try{ localStorage.setItem(CACHE,JSON.stringify({uid:me&&me.id,foyer:foyer,items:items,moves:moves,pct:cfg.pct,pctStock:cfg.pctStock})); }catch(e){} }
 var loading=null;
 function load(){
   if(loading) return loading;
@@ -364,7 +371,7 @@ function load(){
     var err=r.filter(function(x){return x.error;})[0];
     if(err){ msg("Chargement impossible : "+err.error.message,true); return; }
     items=r[0].data.map(norm); moves=r[1].data.map(normM);
-    if(r[2].data){ cfg.pct=+r[2].data.pct; } $("defpct").value=cfg.pct;
+    if(r[2].data){ cfg.pct=+r[2].data.pct; cfg.pctStock=+(r[2].data.pct_stock||0); } showDefs();
     ready=true; saveCache(); render();
   },function(){ msg("Pas de réseau : données affichées depuis le dernier chargement.",true); }).then(function(){ loading=null; });
   return loading;
@@ -372,7 +379,7 @@ function load(){
 function showApp(){ $("auth").hidden=true; $("app").hidden=false; $("who").textContent=me.email; render(); }
 function start(session){
   me=session.user;
-  try{ var c=JSON.parse(localStorage.getItem(CACHE)||"null"); if(c&&c.uid===me.id&&c.foyer){ foyer=c.foyer; items=c.items||[]; moves=c.moves||[]; if(c.pct!=null) cfg.pct=c.pct; $("defpct").value=cfg.pct; ready=true; showApp(); } }catch(e){}
+  try{ var c=JSON.parse(localStorage.getItem(CACHE)||"null"); if(c&&c.uid===me.id&&c.foyer){ foyer=c.foyer; items=c.items||[]; moves=c.moves||[]; if(c.pct!=null) cfg.pct=c.pct; if(c.pctStock!=null) cfg.pctStock=c.pctStock; showDefs(); ready=true; showApp(); } }catch(e){}
   sb.from("foyers").select("*").limit(1).then(function(r){
     if(r.error){ if(!foyer) authMsg("Pas de réseau."); return; }
     if(!r.data.length){ showJoin(); return; }

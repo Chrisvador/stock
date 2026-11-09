@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stock Cevilog</title>
-<meta name="description" content="Stock réel, matériel labo / démo avec dépréciation et attente de livraison client.">
+<meta name="description" content="Stock réel et matériel labo / démo avec dépréciation, attente de livraison client et inventaire.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -248,9 +248,9 @@ td.ck input{width:17px;height:17px;accent-color:var(--ok);cursor:pointer;margin:
   <div class="titlerow">
     <h1>Gestion de stock<span class="sub">Stock réel &bull; Labo / démo &bull; Attente livraison</span></h1>
     <div class="asof">
-      <label class="lab" for="defpct">Dépréciation labo par défaut</label>
-      <input type="number" id="defpct" min="0" max="100" step="1" style="width:80px">
-      <span class="lab">%</span>
+      <span class="lab">Dépréciation par défaut</span>
+      <label class="lab" for="defpctS">Stock</label><input type="number" id="defpctS" min="0" max="100" step="1" style="width:68px"><span class="lab">%</span>
+      <label class="lab" for="defpct">Labo</label><input type="number" id="defpct" min="0" max="100" step="1" style="width:68px"><span class="lab">%</span>
     </div>
   </div>
 
@@ -274,7 +274,7 @@ td.ck input{width:17px;height:17px;accent-color:var(--ok);cursor:pointer;margin:
   <div class="legend" id="legend"></div>
   <div class="status" id="status"></div>
 
-  <div class="note"><b>i</b><span>Au labo, chaque article coché « dépréciable » perd le pourcentage indiqué sur sa fiche ; sans valeur propre, il prend le taux par défaut réglé en haut de page. Les objectifs et filtres sont non dépréciables par défaut et gardent leur prix d’achat. Un retour labo → stock reprend l’article à sa valeur dépréciée. L’attente livraison regroupe le matériel commandé et affecté à un client, pas encore livré ; il n’entre pas dans la valeur nette.</span></div>
+  <div class="note"><b>i</b><span>Au stock réel comme au labo, chaque article coché « dépréciable » perd le pourcentage indiqué sur sa fiche ; sans valeur propre, il prend le taux par défaut de son onglet, réglé en haut de page. Les objectifs et filtres sont non dépréciables par défaut et gardent leur prix d’achat. Le prix d’achat est conservé lors des transferts. L’attente livraison regroupe le matériel commandé et affecté à un client, pas encore livré ; il reste au prix d’achat et n’entre pas dans la valeur nette.</span></div>
   <div class="foot">SAS au capital de 20.000 euros &bull; SIRET 520 499 021 000 35 &bull; RCS Strasbourg TI 520 499 021 &bull; Code APE 7112B<br>TVA FR 96 520 499 021</div>
   <div class="who"><span id="who"></span><button class="linkbtn" id="logout" type="button">Se déconnecter</button></div>
 </div></div></div>
