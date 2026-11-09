@@ -1,5 +1,5 @@
 /* Stock Cevilog : stock réel et labo / démo avec dépréciation en %, attente livraison client.
-   Données dans Supabase (projet mes-chats, tables stk_*), partagées avec les membres du foyer. */
+   Données dans Supabase (tables stk_*), accès par invitation, rôles admin / membre / lecteur. */
 (function(){
 "use strict";
 var SB_URL="https://bqnfsvvaajgrurfozfkv.supabase.co";
@@ -10,7 +10,7 @@ var NOAM=["Objectif","Filtre / optique"];
 var LOC={stock:"Stock réel",labo:"Labo / démo",attente:"Attente livraison"};
 var LOCS={stock:"Stock",labo:"Labo",attente:"Attente"};
 var $=function(id){return document.getElementById(id);};
-var me=null, foyer=null, ready=false, writable=true;
+var me=null, org=null, role=null, ready=false, writable=true;
 var items=[], moves=[], cfg={pct:30,pctStock:0};
 var S={tab:"stock",q:"",cat:"",empty:false,unchk:false,sort:"ref",dir:1};
 try{ var p=JSON.parse(localStorage.getItem("cevilog-stock-ui")||"null"); if(p){ S.tab=p.tab||S.tab; S.empty=!!p.empty; } }catch(e){}
@@ -166,14 +166,14 @@ function locOpts(sel,except){ return Object.keys(LOC).filter(function(k){return 
 function msg(t,err){ var s=$("status"); s.textContent=t; s.className="status"+(err?" err":""); clearTimeout(msg.t); msg.t=setTimeout(function(){ s.textContent=""; },6000); }
 function fail(e){ console.warn(e); msg("Enregistrement impossible : "+((e&&e.message)||"erreur réseau")+".",true); }
 function ok(r){ if(r&&r.error) throw r.error; return r; }
-function toRow(d){ var o={foyer_id:foyer.id}; ["ref","des","cat","brand","loc","qty","pu","amort","pct","client","eta","note"].forEach(function(k){ if(k in d) o[k]=d[k]===""?null:d[k]; }); if("dateIn" in d) o.date_in=d.dateIn||null; if(o.eta==="") o.eta=null; return o; }
+function toRow(d){ var o={org_id:org.id}; ["ref","des","cat","brand","loc","qty","pu","amort","pct","client","eta","note"].forEach(function(k){ if(k in d) o[k]=d[k]===""?null:d[k]; }); if("dateIn" in d) o.date_in=d.dateIn||null; if(o.eta==="") o.eta=null; return o; }
 function addItem(d){ return sb.from("stk_articles").insert(toRow(d)).then(ok); }
 function setItem(id,d){ return sb.from("stk_articles").update(toRow(d)).eq("id",id).then(ok); }
 function updItem(id,d){ return sb.from("stk_articles").update(d).eq("id",id).then(ok); }
 function delItem(id){ return sb.from("stk_articles").delete().eq("id",id).then(ok); }
-function log(m){ var row={foyer_id:foyer.id,user_id:me.id,date:m.date||today(),type:m.type,ref:m.ref,des:m.des,qty:m.qty,from_loc:m.from||null,to_loc:m.to||null,value:m.value==null?null:Math.round(m.value*100)/100,client:m.client||null,note:m.note||null};
+function log(m){ var row={org_id:org.id,user_id:me.id,date:m.date||today(),type:m.type,ref:m.ref,des:m.des,qty:m.qty,from_loc:m.from||null,to_loc:m.to||null,value:m.value==null?null:Math.round(m.value*100)/100,client:m.client||null,note:m.note||null};
   return sb.from("stk_mouvements").insert(row).then(ok).then(function(){ return load(); }); }
-function clean(o){ var r={}; Object.keys(o).forEach(function(k){ if(["id","foyer_id","created_at","updated_at","date_in"].indexOf(k)<0) r[k]=o[k]; }); return r; }
+function clean(o){ var r={}; Object.keys(o).forEach(function(k){ if(["id","org_id","created_at","updated_at","date_in"].indexOf(k)<0) r[k]=o[k]; }); return r; }
 
 function editPanel(it){
   var isNew=!it; it=it||{loc:S.tab==="moves"?"stock":S.tab,cat:"Caméra",qty:1,pu:0,dateIn:today()};
@@ -437,30 +437,79 @@ document.addEventListener("click",function(e){
   var b=e.target;
   if(!resetArm||Date.now()-resetArm>4000){ resetArm=Date.now(); b.textContent="Confirmer : tout décocher ("+LOC[S.tab]+")"; return; }
   resetArm=0;
-  sb.from("stk_articles").update({verifie:false,verifie_le:null}).eq("foyer_id",foyer.id).eq("loc",S.tab).eq("verifie",true).then(ok).then(function(){ load(); msg("Coches remises à zéro pour « "+LOC[S.tab]+" »."); },fail);
+  sb.from("stk_articles").update({verifie:false,verifie_le:null}).eq("org_id",org.id).eq("loc",S.tab).eq("verifie",true).then(ok).then(function(){ load(); msg("Coches remises à zéro pour « "+LOC[S.tab]+" »."); },fail);
 });
 $("q").addEventListener("input",function(){ S.q=this.value; render(); });
-$("addBtn").addEventListener("click",function(){ if(foyer) editPanel(null); });
+$("addBtn").addEventListener("click",function(){ if(org) editPanel(null); });
 function showDefs(){ $("defpct").value=cfg.pct; $("defpctS").value=cfg.pctStock; }
 showDefs();
 [["defpct","pct","labo"],["defpctS","pctStock","stock réel"]].forEach(function(x){ $(x[0]).addEventListener("change",function(){
-  var v=Math.max(0,Math.min(100,num(this.value))); this.value=v; if(!foyer||v===cfg[x[1]]) return;
+  var v=Math.max(0,Math.min(100,num(this.value))); this.value=v; if(!org||v===cfg[x[1]]) return;
   cfg[x[1]]=v; render();
-  sb.from("stk_config").upsert({foyer_id:foyer.id,pct:cfg.pct,pct_stock:cfg.pctStock}).then(ok).then(function(){ saveCache(); msg("Taux par défaut "+x[2]+" : "+NUM.format(v)+" %."); },fail);
+  sb.from("stk_config").upsert({org_id:org.id,pct:cfg.pct,pct_stock:cfg.pctStock}).then(ok).then(function(){ saveCache(); msg("Taux par défaut "+x[2]+" : "+NUM.format(v)+" %."); },fail);
 }); });
+
+/* ---------- utilisateurs ---------- */
+function usersPanel(){
+  var adm=role==="admin";
+  openPanel('<h2>Utilisateurs</h2><div class="sub2">Accès au stock '+esc(org.nom)+'. Votre rôle : '+esc(ROLES[role])+'.</div><div id="u-list" class="ulist"><p class="hint">Chargement…</p></div>'+
+    (adm?'<div class="invite"><span class="lab">Inviter quelqu’un</span><p class="hint">La personne ouvre l’app, crée son compte, puis saisit ce code. Elle arrive en <b>lecture seule</b> ; changez son rôle ici ensuite.</p>'+
+      '<div class="coderow"><span class="code mono" id="u-code">'+esc(org.code||"")+'</span><button class="btn sm" id="u-copy" type="button">Copier l’invitation</button><button class="btn sm" id="u-new" type="button">Nouveau code</button></div>'+
+      '<textarea id="u-txt" class="mono" rows="3" readonly hidden></textarea><p class="hint" id="u-msg"></p></div>':'')+
+    '<div class="fg" style="margin-top:14px"><div class="f c4"><label class="lab" for="u-prenom">Mon prénom</label><input type="text" id="u-prenom" value="'+esc(org.prenom||"")+'"></div></div>'+
+    '<p class="hint" style="margin-top:12px">Rôles : <b>Administrateur</b> peut '+ROLE_TXT.admin+' ; <b>Membre</b> peut '+ROLE_TXT.membre+' ; <b>Lecture seule</b> peut '+ROLE_TXT.lecteur+'.</p>'+
+    '<div class="act"><button class="btn danger" id="u-leave" type="button">Quitter ce stock</button><span class="grow"></span><button class="btn primary" id="u-close" type="button">Fermer</button></div>',
+  function(){
+    $("u-close").onclick=closePanel;
+    function inviteTxt(){ return "Accès au stock "+org.nom+" : "+location.origin+location.pathname+"\nCréez votre compte, puis saisissez le code d’invitation : "+org.code; }
+    function list(){
+      sb.rpc("stk_membres_liste",{o:org.id}).then(function(r){
+        if(r.error){ $("u-list").innerHTML='<p class="err">'+esc(r.error.message)+'</p>'; return; }
+        $("u-list").innerHTML='<table class="utab"><thead><tr><th class="nos">Nom</th><th class="nos">Rôle</th>'+(adm?'<th class="nos">Dernière connexion</th><th class="nos"></th>':'')+'</tr></thead><tbody>'+
+          r.data.map(function(u){ var self=u.user_id===me.id;
+            return '<tr data-u="'+esc(u.user_id)+'"><td class="des">'+esc(u.prenom||(u.email||"—"))+(self?' <span class="tag st">vous</span>':'')+(u.email&&u.prenom?'<small>'+esc(u.email)+'</small>':'')+'</td>'+
+              '<td data-l="Rôle">'+(adm?'<select class="u-role" aria-label="Rôle">'+Object.keys(ROLES).map(function(k){ return '<option value="'+k+'"'+(k===u.role?" selected":"")+'>'+ROLES[k]+'</option>'; }).join("")+'</select>':esc(ROLES[u.role]))+'</td>'+
+              (adm?'<td class="dt" data-l="Dernière connexion">'+(u.derniere_connexion?fd(u.derniere_connexion.slice(0,10)):"jamais")+'</td><td class="act">'+(self?'':'<button class="btn sm danger u-del" type="button">Retirer</button>')+'</td>':'')+'</tr>'; }).join("")+'</tbody></table>';
+      });
+    }
+    list();
+    $("u-list").addEventListener("change",function(e){
+      if(!e.target.classList.contains("u-role")) return;
+      var u=e.target.closest("tr").dataset.u, v=e.target.value;
+      sb.rpc("stk_changer_role",{o:org.id,u:u,r:v}).then(ok).then(function(){ msg("Rôle modifié."); if(u===me.id){ setRole(v); showApp(); render(); } list(); },function(err){ fail(err); list(); });
+    });
+    $("u-list").addEventListener("click",function(e){
+      var b=e.target.closest(".u-del"); if(!b) return;
+      if(!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent="Confirmer"; return; }
+      sb.rpc("stk_retirer",{o:org.id,u:b.closest("tr").dataset.u}).then(ok).then(function(){ msg("Accès retiré."); list(); },fail);
+    });
+    if(adm){
+      $("u-copy").onclick=function(){ var t=inviteTxt(), x=$("u-txt");
+        (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ $("u-msg").textContent="Invitation copiée : collez-la dans un e-mail ou un message."; },function(){ x.hidden=false; x.value=t; x.select(); $("u-msg").textContent="Copiez le texte ci-dessus."; }); };
+      var armN=false; $("u-new").onclick=function(){
+        if(!armN){ armN=true; this.textContent="Confirmer : l’ancien code ne marchera plus"; return; }
+        sb.rpc("stk_nouveau_code",{o:org.id}).then(ok).then(function(r){ org.code=r.data; saveCache(); $("u-code").textContent=r.data; armN=false; $("u-new").textContent="Nouveau code"; $("u-msg").textContent="Nouveau code actif."; },fail); };
+    }
+    $("u-prenom").onchange=function(){ var v=this.value; sb.rpc("stk_mon_prenom",{o:org.id,p:v}).then(ok).then(function(){ org.prenom=v; saveCache(); list(); },fail); };
+    var armL=false; $("u-leave").onclick=function(){
+      if(!armL){ armL=true; this.classList.add("armed"); this.textContent="Confirmer : je perds l’accès"; return; }
+      sb.rpc("stk_retirer",{o:org.id,u:me.id}).then(ok).then(function(){ try{ localStorage.removeItem(CACHE); }catch(e){} location.reload(); },fail); };
+  });
+}
+$("usersBtn").addEventListener("click",function(){ if(org) usersPanel(); });
 
 /* ---------- données ---------- */
 var CACHE="stock-cache";
 function norm(o){ o=Object.assign({},o); o.verifie=!!o.verifie; o.qty=+o.qty||0; o.pu=+o.pu||0; o.pct=o.pct==null?null:+o.pct; o.dateIn=o.date_in; if(!LOC[o.loc]) o.loc="stock"; return o; }
 function normM(m){ return {date:m.date,type:m.type,ref:m.ref,des:m.des,qty:+m.qty||0,from:m.from_loc,to:m.to_loc,value:m.value==null?null:+m.value,client:m.client,note:m.note}; }
-function saveCache(){ try{ localStorage.setItem(CACHE,JSON.stringify({uid:me&&me.id,foyer:foyer,items:items,moves:moves,pct:cfg.pct,pctStock:cfg.pctStock})); }catch(e){} }
+function saveCache(){ try{ localStorage.setItem(CACHE,JSON.stringify({uid:me&&me.id,org:org,role:role,items:items,moves:moves,pct:cfg.pct,pctStock:cfg.pctStock})); }catch(e){} }
 var loading=null;
 function load(){
   if(loading) return loading;
   loading=Promise.all([
     sb.from("stk_articles").select("*").order("ref"),
     sb.from("stk_mouvements").select("*").order("created_at",{ascending:false}).limit(500),
-    sb.from("stk_config").select("*").eq("foyer_id",foyer.id).maybeSingle()
+    sb.from("stk_config").select("*").eq("org_id",org.id).maybeSingle()
   ]).then(function(r){
     var err=r.filter(function(x){return x.error;})[0];
     if(err){ msg("Chargement impossible : "+err.error.message,true); return; }
@@ -470,15 +519,18 @@ function load(){
   },function(){ msg("Pas de réseau : données affichées depuis le dernier chargement.",true); }).then(function(){ loading=null; });
   return loading;
 }
-function showApp(){ $("auth").hidden=true; $("app").hidden=false; $("who").textContent=me.email; render(); }
+var ROLES={admin:"Administrateur",membre:"Membre",lecteur:"Lecture seule"};
+var ROLE_TXT={admin:"tout modifier et gérer les utilisateurs",membre:"consulter et modifier le stock",lecteur:"consulter et exporter, sans rien modifier"};
+function setRole(r){ role=r||"lecteur"; writable=role!=="lecteur"; ["defpct","defpctS"].forEach(function(k){ $(k).disabled=!writable; }); }
+function showApp(){ $("auth").hidden=true; $("app").hidden=false; $("who").textContent=me.email+" · "+(ROLES[role]||"")+(org?" · "+org.nom:""); render(); }
 function start(session){
-  if(me&&me.id===session.user.id&&foyer) return;
+  if(me&&me.id===session.user.id&&org) return;
   me=session.user;
-  try{ var c=JSON.parse(localStorage.getItem(CACHE)||"null"); if(c&&c.uid===me.id&&c.foyer){ foyer=c.foyer; items=c.items||[]; moves=c.moves||[]; if(c.pct!=null) cfg.pct=c.pct; if(c.pctStock!=null) cfg.pctStock=c.pctStock; showDefs(); ready=true; showApp(); } }catch(e){}
-  sb.from("foyers").select("*").limit(1).then(function(r){
-    if(r.error){ if(!foyer) authMsg("Pas de réseau."); return; }
-    if(!r.data.length){ showJoin(); return; }
-    foyer=r.data[0]; showApp(); load();
+  try{ var c=JSON.parse(localStorage.getItem(CACHE)||"null"); if(c&&c.uid===me.id&&c.org){ org=c.org; setRole(c.role); items=c.items||[]; moves=c.moves||[]; if(c.pct!=null) cfg.pct=c.pct; if(c.pctStock!=null) cfg.pctStock=c.pctStock; showDefs(); ready=true; showApp(); } }catch(e){}
+  sb.from("stk_membres").select("role,prenom,org:stk_orgs(*)").eq("user_id",me.id).limit(1).then(function(r){
+    if(r.error){ if(!org) authMsg("Pas de réseau."); return; }
+    if(!r.data.length){ org=null; showJoin(); return; }
+    org=r.data[0].org; setRole(r.data[0].role); org.prenom=r.data[0].prenom; saveCache(); showApp(); load();
   });
 }
 /* ---------- connexion ---------- */
@@ -508,13 +560,14 @@ $("authForm").addEventListener("submit",function(e){
 function showJoin(){ $("app").hidden=true; $("auth").hidden=false; $("authForm").hidden=true; $("joinF").hidden=false; }
 $("joinGo").onclick=function(){
   var code=$("joinCode").value.trim(); if(!code) return;
-  sb.rpc("rejoindre_foyer",{p_code:code,p_prenom:$("joinPrenom").value.trim()||null}).then(function(r){
+  sb.rpc("stk_rejoindre",{p_code:code,p_prenom:$("joinPrenom").value.trim()||null}).then(function(r){
     if(r.error){ $("joinErr").textContent=r.error.message; return; }
+    me=null;
     sb.auth.getSession().then(function(x){ start(x.data.session); });
   });
 };
 $("joinOut").onclick=$("logout").onclick=function(){ sb.auth.signOut().then(function(){ try{ localStorage.removeItem(CACHE); }catch(e){} location.reload(); }); };
-document.addEventListener("visibilitychange",function(){ if(!document.hidden&&me&&foyer) load(); });
+document.addEventListener("visibilitychange",function(){ if(!document.hidden&&me&&org) load(); });
 sb.auth.onAuthStateChange(function(ev,session){ if(ev==="PASSWORD_RECOVERY"){ setMode("newpw"); showLogin(); } else if(ev==="SIGNED_IN"&&session&&!me) setTimeout(function(){ start(session); },0); });
 sb.auth.getSession().then(function(r){ if(r.data.session&&mode!=="newpw") start(r.data.session); else showLogin(); });
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});
