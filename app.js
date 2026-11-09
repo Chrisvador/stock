@@ -318,6 +318,100 @@ $("csvBtn").addEventListener("click",function(){
 });
 $("printBtn").addEventListener("click",function(){ window.print(); });
 
+/* ---------- export PDF (jsPDF chargé à la demande) ---------- */
+function loadScript(src){ return new Promise(function(res,rej){ var x=document.createElement("script"); x.src=src; x.onload=res; x.onerror=function(){ rej(new Error("Chargement impossible : "+src)); }; document.head.appendChild(x); }); }
+var pdfLib=null;
+function pdfReady(){
+  if(window.jspdf&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  return pdfLib||(pdfLib=loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(function(){ return loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"); }).catch(function(e){ pdfLib=null; throw e; }));
+}
+function imgData(src){ return fetch(src).then(function(r){ return r.blob(); }).then(function(b){ return new Promise(function(res){ var f=new FileReader(); f.onload=function(){ res(f.result); }; f.readAsDataURL(b); }); }).catch(function(){ return null; }); }
+// Les polices PDF standard ne connaissent que le jeu WinAnsi : on remplace les quelques caractères hors jeu.
+function P(t){ return String(t==null?"":t).replace(/[   ]/g," ").replace(/−/g,"-").replace(/→/g,">").replace(/[^\x00-\xff€’‘“”–—…Œœ•×]/g,"?"); }
+function pdfRows(loc,list){
+  var labo=loc!=="attente", tot={q:0,c:0,d:0,v:0};
+  var head=labo?["Vérif.","Référence","Désignation","Catégorie","Qté","P.U. HT","Total HT","Dépréc.","Montant déprécié","Valeur nette"]:["Référence","Désignation","Catégorie","Qté","P.U. HT","Total HT","Client","Livraison prévue"];
+  var body=list.map(function(i){
+    var d=dep(i), am=isAm(i); tot.q+=i.qty; tot.c+=d.cost; tot.d+=d.cum; tot.v+=d.vnc;
+    var des=i.des+([i.brand,i.note].filter(Boolean).length?"\n"+[i.brand,i.note].filter(Boolean).join(" · "):"");
+    return labo?[i.verifie?"Oui":"",i.ref,des,i.cat,NUM.format(i.qty),eur(i.pu),eur(d.cost),am?NUM.format(d.pct)+" %":"non",am?neg(d.cum):"-",eur(d.vnc)]
+      :[i.ref,des,i.cat,NUM.format(i.qty),eur(i.pu),eur(d.cost),i.client||"-",fd(i.eta)];
+  });
+  var foot=labo?[["",list.length+" ligne"+(list.length>1?"s":""),"","",NUM.format(tot.q),"",eur(tot.c),"",neg(tot.d),eur(tot.v)]]:[[list.length+" ligne"+(list.length>1?"s":""),"","",NUM.format(tot.q),"",eur(tot.c),"",""]];
+  var right=labo?[4,5,6,7,8,9]:[3,4,5];
+  return {head:[head.map(P)],body:body.map(function(r){return r.map(P);}),foot:foot.map(function(r){return r.map(P);}),right:right,tot:tot};
+}
+function exportPdf(scope){
+  var btn=$("pdfBtn"); btn.disabled=true; msg("Préparation du PDF…");
+  Promise.all([pdfReady(),imgData("logo-clair.png")]).then(function(r){
+    var logo=r[1], J=window.jspdf.jsPDF, doc=new J({orientation:"landscape",unit:"mm",format:"a4"});
+    var W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=12, INK=[22,21,15], GOLD=[255,201,4], MUT=[138,133,118];
+    function header(){
+      if(logo) doc.addImage(logo,"PNG",M,8,44,11);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc,MUT);
+      doc.text(P("6, rue Icare • 67960 Entzheim • France"),W-M,10,{align:"right"});
+      doc.text(P("Tél. +33 (0)7 43 68 02 00 • cbrandt@cevilog.com • www.cevilog.com"),W-M,14,{align:"right"});
+      doc.setFillColor.apply(doc,GOLD); doc.rect(M,22,(W-2*M)*0.34,0.9,"F"); doc.setFillColor(228,224,211); doc.rect(M+(W-2*M)*0.34,22,(W-2*M)*0.66,0.9,"F");
+    }
+    function footer(){
+      var n=doc.internal.getNumberOfPages();
+      for(var p=1;p<=n;p++){ doc.setPage(p); doc.setFontSize(7); doc.setTextColor.apply(doc,MUT);
+        doc.text(P("CEVILOG SAS au capital de 20.000 euros • SIRET 520 499 021 000 35 • RCS Strasbourg TI 520 499 021 • TVA FR 96 520 499 021"),M,H-6);
+        doc.text("Page "+p+" / "+n,W-M,H-6,{align:"right"}); }
+    }
+    var title=scope==="all"?"Inventaire complet":S.tab==="moves"?"Mouvements":LOC[S.tab];
+    header();
+    doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.setTextColor.apply(doc,INK); doc.text(P("Gestion de stock — "+title),M,32);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor.apply(doc,MUT);
+    var sub="Édité le "+fd(today())+" par "+(me&&me.email||"")+" • Dépréciation par défaut : stock "+NUM.format(cfg.pctStock)+" %, labo "+NUM.format(cfg.pct)+" %";
+    if(scope!=="all"&&S.tab!=="moves"&&(S.cat||S.q||S.unchk)) sub+=" • Filtre : "+[S.cat,S.q&&("« "+S.q+" »"),S.unchk&&"non vérifiés"].filter(Boolean).join(", ");
+    doc.text(P(sub),M,37.5);
+    var y=42;
+    var tableStyle={theme:"grid",margin:{left:M,right:M,top:28,bottom:12},styles:{font:"helvetica",fontSize:7.6,cellPadding:1.4,lineColor:[228,224,211],lineWidth:0.15,textColor:INK,overflow:"linebreak",valign:"middle"},
+      headStyles:{fillColor:INK,textColor:[255,255,255],fontStyle:"bold",fontSize:7},footStyles:{fillColor:[255,248,224],textColor:INK,fontStyle:"bold"},
+      alternateRowStyles:{fillColor:[251,250,244]},didDrawPage:function(d){ if(d.pageNumber>1) header(); }};
+    function section(label,loc,list){
+      var t=pdfRows(loc,list), cs={};
+      t.right.forEach(function(c){ cs[c]={halign:"right"}; });
+      var refCol=loc==="attente"?0:1; cs[refCol]={fontStyle:"bold",cellWidth:34}; cs[refCol+1]={cellWidth:loc==="attente"?78:70};
+      if(loc!=="attente") cs[0]={halign:"center",cellWidth:11};
+      if(label){ if(y>H-40){ doc.addPage(); header(); y=30; } doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor.apply(doc,INK); doc.text(P(label),M,y+4);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc,MUT);
+        doc.text(P(loc==="attente"?"Achat "+eur(t.tot.c)+" • hors valeur nette":"Achat "+eur(t.tot.c)+" • dépréciation "+neg(t.tot.d)+" • valeur nette "+eur(t.tot.v)),W-M,y+4,{align:"right"}); y+=7; }
+      doc.autoTable(Object.assign({},tableStyle,{startY:y,head:t.head,body:t.body,foot:t.foot,showFoot:"lastPage",columnStyles:cs}));
+      y=doc.lastAutoTable.finalY+8; return t.tot;
+    }
+    function sorted(list){ return list.sort(function(a,b){ return (a.cat||"").localeCompare(b.cat||"")||(a.ref||"").localeCompare(b.ref||""); }); }
+    if(scope==="all"){
+      var T={}; ["stock","labo","attente"].forEach(function(l){ var list=sorted(items.filter(function(i){ return i.loc===l&&i.qty>0; })); if(list.length) T[l]=section(LOC[l],l,list); });
+      var net=(T.stock?T.stock.v:0)+(T.labo?T.labo.v:0), ach=(T.stock?T.stock.c:0)+(T.labo?T.labo.c:0);
+      if(y>H-30){ doc.addPage(); header(); y=30; }
+      doc.setFillColor(255,248,224); doc.rect(W-M-110,y-2,110,14,"F"); doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(143,109,0);
+      doc.text(P("VALEUR NETTE (stock + labo)"),W-M-106,y+3); doc.setFontSize(13); doc.setTextColor.apply(doc,INK); doc.text(P(eur(net)),W-M-4,y+8.5,{align:"right"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc,MUT); doc.text(P("achat "+eur(ach)+" • dépréciation "+neg(ach-net)),W-M-106,y+9.5);
+    } else if(S.tab==="moves"){
+      var q=S.q.trim().toLowerCase(), L=moves.filter(function(m){ return !q||((m.ref||"")+" "+(m.des||"")+" "+(m.client||"")+" "+(m.note||"")).toLowerCase().indexOf(q)>=0; });
+      doc.autoTable(Object.assign({},tableStyle,{startY:y,head:[["Date","Type","Référence","Désignation","Qté","De > vers","Valeur","Client / note"].map(P)],
+        body:L.map(function(m){ return [fd(m.date),MT[m.type]||m.type,m.ref,m.des,m.qty?NUM.format(m.qty):"-",(m.from?LOCS[m.from]:"")+(m.from&&m.to?" > ":"")+(m.to?LOCS[m.to]:""),m.value!=null?eur(m.value):"",[m.client,m.note].filter(Boolean).join(" · ")].map(P); }),
+        columnStyles:{2:{fontStyle:"bold"},4:{halign:"right"},6:{halign:"right"}}}));
+    } else {
+      var list=visible().sort(function(a,b){ var x=sortVal(a,S.sort),z=sortVal(b,S.sort); return (x<z?-1:x>z?1:0)*S.dir; });
+      section("",S.tab,list);
+    }
+    footer();
+    var name="Stock-Cevilog_"+(scope==="all"?"inventaire":S.tab)+"_"+today()+".pdf";
+    doc.save(name); msg("PDF enregistré : "+name);
+  }).catch(function(e){ console.warn(e); msg("Export PDF impossible : "+(e.message||"erreur")+". Vérifiez la connexion.",true); }).then(function(){ btn.disabled=false; });
+}
+$("pdfBtn").addEventListener("click",function(){
+  var cur=S.tab==="moves"?"Mouvements":LOC[S.tab];
+  openPanel('<h2>Exporter en PDF</h2><div class="sub2">A4 paysage, en-tête Cevilog, numéro de page.</div>'+
+    '<div class="fg"><label class="f c6 cb" for="px-cur"><input type="radio" name="px" id="px-cur" value="cur" checked> Onglet affiché : '+esc(cur)+' <small>— avec la recherche et les filtres en cours</small></label>'+
+    '<label class="f c6 cb" for="px-all"><input type="radio" name="px" id="px-all" value="all"> Inventaire complet <small>— stock réel, labo / démo et attente livraison, avec la valeur nette</small></label></div>'+
+    '<div class="act"><button class="btn" id="px-cancel" type="button">Annuler</button><button class="btn primary" id="px-ok" type="button">Créer le PDF</button></div>',
+  function(){ $("px-cancel").onclick=closePanel; $("px-ok").onclick=function(){ var sc=$("px-all").checked?"all":"cur"; closePanel(); exportPdf(sc); }; });
+});
+
 /* ---------- événements ---------- */
 document.addEventListener("click",function(e){
   var t=e.target.closest?e.target:null; if(!t) return;

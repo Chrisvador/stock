@@ -230,7 +230,7 @@ td.ck input{width:17px;height:17px;accent-color:var(--ok);cursor:pointer;margin:
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .wrap{padding:0!important}
   .sheet{border:0;box-shadow:none;padding:0;max-width:none}
-  .bar .search,.bar .grow,#csvBtn,#printBtn,#addBtn,.chips,.legend,.status,.note,.who,.asof,td.act,th.nos:last-child{display:none!important}
+  .bar .search,.bar .grow,#csvBtn,#pdfBtn,#printBtn,#addBtn,.chips,.legend,.status,.note,.who,.asof,td.act,th.nos:last-child{display:none!important}
   .tabs button:not([aria-pressed="true"]){display:none}
   table{font-size:9.5px} td,th{padding:3px 5px} tr{page-break-inside:avoid}
   .sum .v{font-size:13px}
@@ -265,6 +265,7 @@ td.ck input{width:17px;height:17px;accent-color:var(--ok);cursor:pointer;margin:
     </div>
     <input type="search" class="search" id="q" placeholder="Rechercher réf., désignation, marque, client…" autocomplete="off">
     <div class="grow"></div>
+    <button class="btn" id="pdfBtn" type="button">Exporter PDF</button>
     <button class="btn" id="csvBtn" type="button">Exporter CSV</button>
     <button class="btn" id="printBtn" type="button">Imprimer</button>
     <button class="btn primary" id="addBtn" type="button">+ Article</button>
