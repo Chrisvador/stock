@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stock Cevilog</title>
+<meta name="description" content="Stock réel, matériel labo / démo avec dépréciation et attente de livraison client.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stock">
+<meta name="theme-color" content="#F1EFE7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#100F0D" media="(prefers-color-scheme: dark)">
+<style>html{color-scheme:light dark}body{margin:0}[hidden]{display:none!important}img{max-width:100%}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: fiche Cevilog (logo + coordonnées + filet or), bandeau de synthèse, onglets Stock / Labo / Mouvements, tableau dense. */
+:root{
+  --paper:#F1EFE7; --card:#FFFFFF; --ink:#16150F; --ink2:#4B483D; --muted:#8A8576;
+  --line:#E4E0D3; --line2:#CDC7B4; --gold:#FFC904; --gold-deep:#8F6D00; --tint:#FFF8E0;
+  --field:#FBFAF4; --field-line:#DAD5C4; --ok:#2F7D4F; --bad:#B3261E; --labo:#3D5A80; --labo-tint:#E8EEF6;
+  --shadow:0 1px 2px rgba(22,21,15,.06), 0 24px 60px -34px rgba(22,21,15,.45);
+  --logo-l:1; --logo-d:0;
+  --f-disp:Saira, "IBM Plex Sans", sans-serif;
+  --f-body:"IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#100F0D; --card:#1A1915; --ink:#F1EFE6; --ink2:#C4C0B2; --muted:#8B8679;
+    --line:#2C2A23; --line2:#413E34; --gold-deep:#FFD54A; --tint:#2A2415;
+    --field:#211F1A; --field-line:#3A372E; --ok:#5DBB83; --bad:#F2867E; --labo:#93B4DC; --labo-tint:#1C2533;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 24px 60px -34px rgba(0,0,0,.9);
+    --logo-l:0; --logo-d:1; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#100F0D; --card:#1A1915; --ink:#F1EFE6; --ink2:#C4C0B2; --muted:#8B8679;
+  --line:#2C2A23; --line2:#413E34; --gold-deep:#FFD54A; --tint:#2A2415;
+  --field:#211F1A; --field-line:#3A372E; --ok:#5DBB83; --bad:#F2867E; --labo:#93B4DC; --labo-tint:#1C2533;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 24px 60px -34px rgba(0,0,0,.9);
+  --logo-l:0; --logo-d:1; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+input,button,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.wrap{padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:center}
+.sheet{width:100%;max-width:1180px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:28px 30px 24px;min-width:0}
+
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.logo{position:relative;width:220px;height:54px;flex:0 0 auto;max-width:100%}
+.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left center}
+.logo .l{opacity:var(--logo-l)} .logo .d{opacity:var(--logo-d)}
+.addr{font-size:11.5px;line-height:1.65;color:var(--ink2);text-align:right}
+.addr .w{color:var(--gold-deep);font-weight:600}
+.rule{height:3px;margin:20px 0 0;background:linear-gradient(90deg,var(--gold) 0 34%,var(--line) 34% 100%);border-radius:2px}
+
+.titlerow{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:16px}
+h1{font-family:var(--f-disp);font-weight:700;font-size:26px;margin:0;line-height:1.1;text-wrap:balance}
+h1 .sub{display:block;font-size:12.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+.asof{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lab{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+input[type=text],input[type=date],input[type=number],input[type=search],select,textarea{
+  width:100%;background:var(--field);color:var(--ink);border:1px solid var(--field-line);border-radius:5px;padding:6px 8px;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 25%,transparent)}
+input[type=number],.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.asof input{width:150px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid var(--line2);border-radius:6px;background:var(--card);cursor:pointer;font-size:13px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--ink2)}
+.btn.primary{background:var(--gold);border-color:#E0AE00;color:#1A1503;font-weight:600}
+.btn.primary:hover{background:#FFD534}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
+.btn.danger.armed{background:var(--bad);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* summary */
+.sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:18px;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.sum>div{padding:11px 13px;border-left:1px solid var(--line);min-width:0}
+.sum>div:first-child{border-left:0}
+.sum .k{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.sum .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;margin-top:3px;white-space:nowrap}
+.sum .s{font-size:11px;color:var(--muted);margin-top:1px}
+.sum .big{background:var(--tint)} .sum .big .k{color:var(--gold-deep)}
+.sum .lb .k{color:var(--labo)}
+.sum .neg .v{color:var(--bad)}
+
+/* tabs + tools */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:20px}
+.tabs{display:inline-flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden;background:var(--card)}
+.tabs button{padding:7px 14px;border:0;background:transparent;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.tabs .n{font-family:var(--f-mono);font-weight:500;opacity:.7;margin-left:4px}
+.bar .grow{flex:1 1 auto}
+.bar .search{width:240px;max-width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:1px solid var(--line2);background:var(--card);border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer;color:var(--ink2)}
+.chip[aria-pressed="true"]{background:var(--tint);border-color:var(--gold);color:var(--ink);font-weight:600}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);margin-left:auto}
+
+/* table */
+/* table : tient dans la largeur de la fiche, pas de défilement horizontal */
+.tw{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:color-mix(in srgb,var(--ink) 5%,transparent);padding:8px 7px;cursor:pointer;user-select:none;line-height:1.25;vertical-align:bottom}
+th.r,td.r{text-align:right}
+th.nos{cursor:default}
+th .ar{opacity:.6}
+td{padding:6px 7px;border-top:1px solid var(--line);vertical-align:middle}
+tbody tr:hover{background:color-mix(in srgb,var(--gold) 6%,transparent)}
+td.ref{font-family:var(--f-mono);font-size:11.5px;font-weight:600;word-break:break-all;min-width:110px}
+td.ref small{display:block;font-family:var(--f-body);font-weight:400;font-size:10.5px;color:var(--muted);word-break:normal}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+td.des small{display:block;color:var(--muted);font-size:10.5px}
+td.dt{font-family:var(--f-mono);font-size:11.5px;white-space:nowrap}
+td.dt small{display:block;font-family:var(--f-body);color:var(--muted);font-size:10.5px}
+td.act{white-space:nowrap;text-align:right;width:1%}
+.ib{width:27px;height:27px;display:inline-grid;place-items:center;border:1px solid var(--line2);border-radius:5px;background:var(--card);cursor:pointer;font-size:13px;line-height:1;padding:0;color:var(--ink2)}
+.ib:hover{border-color:var(--ink2);color:var(--ink)}
+.ib.go{background:var(--gold);border-color:#E0AE00;color:#1A1503;width:auto;padding:0 8px;font-size:11.5px;font-weight:600}
+.ib:disabled{opacity:.35;cursor:not-allowed}
+tr.zero td{color:var(--muted)}
+tfoot td{font-weight:600;background:color-mix(in srgb,var(--ink) 4%,transparent);border-top:1px solid var(--line2)}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.tag.st{background:var(--tint);color:var(--gold-deep)}
+.tag.lb{background:var(--labo-tint);color:var(--labo)}
+.tag.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.tag.out{background:color-mix(in srgb,var(--bad) 13%,transparent);color:var(--bad)}
+.tag.am{background:var(--line);color:var(--ink2)}
+.tag.late{background:var(--bad);color:#fff}
+.bar-dep{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:3px;width:70px;margin-left:auto}
+.bar-dep i{display:block;height:100%;background:var(--labo)}
+.empty{padding:28px 14px;text-align:center;color:var(--muted);font-size:13px}
+.empty b{display:block;color:var(--ink);font-size:14px;margin-bottom:4px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:11px;color:var(--muted)}
+.legend span b{font-family:var(--f-mono);color:var(--ink2);margin-right:4px}
+
+.note{margin-top:14px;font-size:11.5px;color:var(--muted);display:flex;gap:7px;align-items:flex-start}
+.note b{color:var(--gold-deep)}
+.status{font-size:12px;color:var(--muted);min-height:18px;margin-top:6px}
+.status.err{color:var(--bad)}
+.foot{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);font-size:9.5px;line-height:1.6;color:var(--muted);text-align:center}
+
+/* panneau */
+.ov{position:fixed;inset:0;background:rgba(16,15,13,.45);display:flex;align-items:flex-start;justify-content:center;z-index:50;overflow-y:auto;padding:max(24px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.pn{width:100%;max-width:620px;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:20px 22px}
+.pn h2{font-family:var(--f-disp);font-size:18px;margin:0 0 4px}
+.pn .sub2{font-size:12px;color:var(--muted);margin-bottom:14px}
+.fg{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px 14px}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}.c6{grid-column:span 6}
+.pn .act{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.pn .act .grow{flex:1}
+.hint{font-size:11.5px;color:var(--muted)}
+.cb{display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 9px;border:1px solid var(--field-line);border-radius:5px;background:var(--field);cursor:pointer}
+.cb input{width:16px;height:16px;accent-color:var(--labo)}
+.cb small{color:var(--muted);font-size:11px}
+.prev{border:1px solid var(--line);border-radius:6px;padding:9px 11px;font-size:12px;color:var(--ink2);background:var(--field)}
+.prev b{font-family:var(--f-mono);color:var(--ink)}
+.sched{width:100%;font-size:12px;margin-top:4px}
+.sched td,.sched th{padding:4px 8px;cursor:default}
+
+@media (max-width:980px){
+  .sum{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .sum>div:nth-child(n+4){border-top:1px solid var(--line)}
+  .sum>div:nth-child(4){border-left:0}
+  .sum .big{grid-column:span 2}
+}
+/* téléphone : chaque ligne devient une fiche */
+@media (max-width:760px){
+  .sheet{padding:20px 14px}
+  .addr{text-align:left}
+  .sum{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sum>div{border-top:1px solid var(--line)!important;border-left:1px solid var(--line)!important}
+  .sum>div:nth-child(-n+2){border-top:0!important}
+  .sum>div:nth-child(odd){border-left:0!important}
+  .sum .big{grid-column:span 2}
+  .bar .search{width:100%}
+  .tabs{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .tabs button{padding:8px 6px}
+  .fg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .c2,.c3,.c4,.c6{grid-column:span 2}
+  .chk{margin-left:0}
+  table,tbody,tfoot,tr,td{display:block;width:100%}
+  thead{display:none}
+  tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:10px 12px;border-top:1px solid var(--line)}
+  tbody tr:first-child{border-top:0}
+  td{border:0;padding:0}
+  td.ref,td.des,td.act{grid-column:span 2}
+  td.act{text-align:left;width:auto;margin-top:4px}
+  td[data-l]::before{content:attr(data-l);display:block;font-family:var(--f-body);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  td.num{text-align:left}
+  .bar-dep{margin-left:0}
+  tfoot tr{display:flex;flex-wrap:wrap;gap:4px 14px;padding:9px 12px}
+  tfoot td{background:none;border:0;padding:0;width:auto}
+  tfoot td:empty{display:none}
+}
+
+/* inventaire */
+th.ck,td.ck{width:28px;text-align:center;padding-left:9px;padding-right:2px}
+td.ck input{width:17px;height:17px;accent-color:var(--ok);cursor:pointer;margin:0;vertical-align:middle}
+.chk{gap:12px;flex-wrap:wrap}
+.chk label{display:flex;align-items:center;gap:5px}
+@media (max-width:760px){ td.ck{grid-column:span 2;text-align:left;padding:0} td.ck::after{content:" Vérifié";font-size:11px;color:var(--muted)} }
+@media print{ td.ck input{accent-color:#000} }
+/* connexion */
+.auth{max-width:420px;margin:0 auto}
+.auth .sheet{padding:26px 24px}
+.auth h1{margin-top:16px}
+.auth form,.auth .join{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+.auth .f{gap:4px}
+.err{color:var(--bad);font-size:12.5px;min-height:16px;margin:0}
+.links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.linkbtn{border:0;background:none;color:var(--gold-deep);cursor:pointer;padding:0;font-size:12.5px;text-decoration:underline;text-underline-offset:2px}
+.who{display:flex;justify-content:center;gap:12px;align-items:center;font-size:11.5px;color:var(--muted);margin-top:10px}
+/* impression : A4 paysage, une page en largeur */
+@media print{
+  @page{size:A4 landscape;margin:9mm}
+  html,body{background:#fff!important;color:#000}
+  :root{--ink:#000;--ink2:#333;--muted:#666;--line:#ccc;--line2:#aaa;--card:#fff;--paper:#fff;--logo-l:1;--logo-d:0}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wrap{padding:0!important}
+  .sheet{border:0;box-shadow:none;padding:0;max-width:none}
+  .bar .search,.bar .grow,#csvBtn,#printBtn,#addBtn,.chips,.legend,.status,.note,.who,.asof,td.act,th.nos:last-child{display:none!important}
+  .tabs button:not([aria-pressed="true"]){display:none}
+  table{font-size:9.5px} td,th{padding:3px 5px} tr{page-break-inside:avoid}
+  .sum .v{font-size:13px}
+  .logo{height:36px;width:150px}
+}
+</style>
+</head>
+<body>
+<div id="app" hidden><div class="wrap"><div class="sheet">
+  <div class="head">
+    <div class="logo"><img class="l" src="logo-clair.png" alt="Cevilog — Vision system"><img class="d" src="logo-sombre.png" alt=""></div>
+    <div class="addr">6, rue Icare &bull; 67960 Entzheim &bull; France<br>Tél. +33 (0)7 43 68 02 00 &bull; Mob. +33 (0)6 65 72 29 77<br>cbrandt@cevilog.com &bull; <span class="w">www.cevilog.com</span></div>
+  </div>
+  <div class="rule"></div>
+  <div class="titlerow">
+    <h1>Gestion de stock<span class="sub">Stock réel &bull; Labo / démo &bull; Attente livraison</span></h1>
+    <div class="asof">
+      <label class="lab" for="defpct">Dépréciation labo par défaut</label>
+      <input type="number" id="defpct" min="0" max="100" step="1" style="width:80px">
+      <span class="lab">%</span>
+    </div>
+  </div>
+
+  <div class="sum" id="sum"></div>
+
+  <div class="bar">
+    <div class="tabs" role="group" aria-label="Vue">
+      <button id="t-stock" data-tab="stock" aria-pressed="true">Stock réel<span class="n" id="n-stock"></span></button>
+      <button id="t-labo" data-tab="labo" aria-pressed="false">Labo / démo<span class="n" id="n-labo"></span></button>
+      <button id="t-attente" data-tab="attente" aria-pressed="false">Attente livraison<span class="n" id="n-attente"></span></button>
+      <button id="t-moves" data-tab="moves" aria-pressed="false">Mouvements</button>
+    </div>
+    <input type="search" class="search" id="q" placeholder="Rechercher réf., désignation, marque, client…" autocomplete="off">
+    <div class="grow"></div>
+    <button class="btn" id="csvBtn" type="button">Exporter CSV</button>
+    <button class="btn" id="printBtn" type="button">Imprimer</button>
+    <button class="btn primary" id="addBtn" type="button">+ Article</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="tw" id="tw"></div>
+  <div class="legend" id="legend"></div>
+  <div class="status" id="status"></div>
+
+  <div class="note"><b>i</b><span>Au labo, chaque article coché « dépréciable » perd le pourcentage indiqué sur sa fiche ; sans valeur propre, il prend le taux par défaut réglé en haut de page. Les objectifs et filtres sont non dépréciables par défaut et gardent leur prix d’achat. Un retour labo → stock reprend l’article à sa valeur dépréciée. L’attente livraison regroupe le matériel commandé et affecté à un client, pas encore livré ; il n’entre pas dans la valeur nette.</span></div>
+  <div class="foot">SAS au capital de 20.000 euros &bull; SIRET 520 499 021 000 35 &bull; RCS Strasbourg TI 520 499 021 &bull; Code APE 7112B<br>TVA FR 96 520 499 021</div>
+  <div class="who"><span id="who"></span><button class="linkbtn" id="logout" type="button">Se déconnecter</button></div>
+</div></div></div>
+
+<div id="auth" class="wrap" hidden><div class="auth"><div class="sheet">
+  <div class="logo"><img class="l" src="logo-clair.png" alt="Cevilog — Vision system"><img class="d" src="logo-sombre.png" alt=""></div>
+  <div class="rule"></div>
+  <h1>Gestion de stock<span class="sub">Connexion</span></h1>
+  <form id="authForm">
+    <div class="f" id="authEmailF"><label class="lab" for="authEmail">E-mail</label><input type="text" inputmode="email" id="authEmail" autocomplete="email" autocapitalize="off"></div>
+    <div class="f" id="authPwF"><label class="lab" for="authPw">Mot de passe</label><input type="password" id="authPw" autocomplete="current-password" style="width:100%;background:var(--field);color:var(--ink);border:1px solid var(--field-line);border-radius:5px;padding:6px 8px"></div>
+    <p class="err" id="authErr" role="alert"></p>
+    <button class="btn primary" id="authGo" type="submit">Se connecter</button>
+    <div class="links"><button class="linkbtn" type="button" id="authForgot">Mot de passe oublié ?</button><button class="linkbtn" type="button" id="authAlt">Créer un compte</button></div>
+    <p class="hint">Même compte que l’app Mes chats.</p>
+  </form>
+  <div class="join" id="joinF" hidden>
+    <p class="hint">Ce compte n’a pas encore accès au stock. Saisissez le code d’invitation affiché dans les Réglages de l’app Mes chats.</p>
+    <div class="f"><label class="lab" for="joinCode">Code d’invitation</label><input type="text" id="joinCode" class="mono" autocapitalize="characters"></div>
+    <div class="f"><label class="lab" for="joinPrenom">Prénom</label><input type="text" id="joinPrenom"></div>
+    <p class="err" id="joinErr"></p>
+    <button class="btn primary" id="joinGo" type="button">Rejoindre</button>
+    <button class="linkbtn" id="joinOut" type="button">Se déconnecter</button>
+  </div>
+</div></div></div>
+
+<div class="ov" id="ov" hidden><div class="pn" id="pn" role="dialog" aria-modal="true"></div></div>
+
+<script src="supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
