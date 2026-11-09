@@ -472,6 +472,7 @@ function load(){
 }
 function showApp(){ $("auth").hidden=true; $("app").hidden=false; $("who").textContent=me.email; render(); }
 function start(session){
+  if(me&&me.id===session.user.id&&foyer) return;
   me=session.user;
   try{ var c=JSON.parse(localStorage.getItem(CACHE)||"null"); if(c&&c.uid===me.id&&c.foyer){ foyer=c.foyer; items=c.items||[]; moves=c.moves||[]; if(c.pct!=null) cfg.pct=c.pct; if(c.pctStock!=null) cfg.pctStock=c.pctStock; showDefs(); ready=true; showApp(); } }catch(e){}
   sb.from("foyers").select("*").limit(1).then(function(r){
@@ -502,7 +503,7 @@ $("authForm").addEventListener("submit",function(e){
   else if(mode==="signup") p=sb.auth.signUp({email:email,password:pw,options:{emailRedirectTo:back}}).then(function(r){ if(!r.error&&!r.data.session) authMsg("Compte créé : confirmez-le avec le lien reçu par e-mail, puis connectez-vous."); return r; });
   else if(mode==="forgot") p=sb.auth.resetPasswordForEmail(email,{redirectTo:back}).then(function(r){ if(!r.error) authMsg("Lien envoyé : ouvrez l’e-mail sur cet appareil."); return r; });
   else p=sb.auth.updateUser({password:pw}).then(function(r){ if(!r.error){ mode="login"; sb.auth.getSession().then(function(x){ if(x.data.session) start(x.data.session); }); } return r; });
-  p.then(function(r){ btn.disabled=false; if(r&&r.error) authMsg(r.error.message==="Invalid login credentials"?"E-mail ou mot de passe incorrect.":r.error.message); },function(err){ btn.disabled=false; authMsg(err.message); });
+  p.then(function(r){ btn.disabled=false; if(r&&!r.error&&r.data&&r.data.session&&(mode==="login"||mode==="signup")) start(r.data.session); if(r&&r.error) authMsg(r.error.message==="Invalid login credentials"?"E-mail ou mot de passe incorrect.":r.error.message); },function(err){ btn.disabled=false; authMsg(err.message); });
 });
 function showJoin(){ $("app").hidden=true; $("auth").hidden=false; $("authForm").hidden=true; $("joinF").hidden=false; }
 $("joinGo").onclick=function(){
@@ -514,7 +515,7 @@ $("joinGo").onclick=function(){
 };
 $("joinOut").onclick=$("logout").onclick=function(){ sb.auth.signOut().then(function(){ try{ localStorage.removeItem(CACHE); }catch(e){} location.reload(); }); };
 document.addEventListener("visibilitychange",function(){ if(!document.hidden&&me&&foyer) load(); });
-sb.auth.onAuthStateChange(function(ev,session){ if(ev==="PASSWORD_RECOVERY"){ setMode("newpw"); showLogin(); } });
+sb.auth.onAuthStateChange(function(ev,session){ if(ev==="PASSWORD_RECOVERY"){ setMode("newpw"); showLogin(); } else if(ev==="SIGNED_IN"&&session&&!me) setTimeout(function(){ start(session); },0); });
 sb.auth.getSession().then(function(r){ if(r.data.session&&mode!=="newpw") start(r.data.session); else showLogin(); });
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});
 })();
